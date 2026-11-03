@@ -1,0 +1,152 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  PERSONAL_MESSAGE_SCENES,
+  SCENE_ORDER,
+  SceneId,
+} from './data/messages';
+import { HeartBackground } from './components/HeartBackground';
+import { MusicControl } from './components/MusicControl';
+import { CountdownScene } from './components/CountdownScene';
+import { OpeningTypographyScene } from './components/OpeningTypographyScene';
+import { CatGuitarScene } from './components/CatGuitarScene';
+import { ScrapbookScene } from './components/ScrapbookScene';
+import { MessageScene } from './components/MessageScene';
+import { FinalScene } from './components/FinalScene';
+
+export function App() {
+  const [currentScene, setCurrentScene] = useState<SceneId>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const requested = params.get('scene') as SceneId | null;
+      if (requested && SCENE_ORDER.includes(requested)) {
+        return requested;
+      }
+    }
+    return 'countdown';
+  });
+
+  const [userInteracted, setUserInteracted] = useState<boolean>(false);
+  const [customPhotos, setCustomPhotos] = useState<Record<string, string>>({});
+  const [customAudioUrl, setCustomAudioUrl] = useState<string | undefined>(
+    undefined
+  );
+
+  const registerInteraction = useCallback(() => {
+    setUserInteracted((prev) => (prev ? prev : true));
+  }, []);
+
+  const handleSelectCustomPhoto = useCallback(
+    (fileName: string, blobUrl: string) => {
+      registerInteraction();
+      setCustomPhotos((prev) => ({
+        ...prev,
+        [fileName]: blobUrl,
+      }));
+    },
+    [registerInteraction]
+  );
+
+  const goToScene = useCallback((nextScene: SceneId) => {
+    setCurrentScene(nextScene);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  // Unlock audio on first pointer or keyboard interaction anywhere in the document
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      setUserInteracted(true);
+    };
+    window.addEventListener('pointerdown', handleFirstInteraction, {
+      once: true,
+      passive: true,
+    });
+    window.addEventListener('keydown', handleFirstInteraction, {
+      once: true,
+      passive: true,
+    });
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, []);
+
+  const activeMessageScene = PERSONAL_MESSAGE_SCENES.find(
+    (m) => m.id === currentScene
+  );
+
+  return (
+    <div className="relative min-h-dvh w-full overflow-x-hidden selection:bg-[#FADADD] selection:text-[#8E2A49]">
+      {/* Persistent Multi-Depth Floating Heart Particle Atmosphere */}
+      <HeartBackground />
+
+      {/* Persistent Audio Player for "/audio/wala-asha-wala-kan.mp3" */}
+      <MusicControl
+        autoStartTrigger={userInteracted}
+        customAudioUrl={customAudioUrl}
+        onSelectCustomAudio={(url) => {
+          registerInteraction();
+          setCustomAudioUrl(url);
+        }}
+      />
+
+      {/* Active Scene Container */}
+      <main className="relative z-10 w-full min-h-dvh">
+        {currentScene === 'countdown' && (
+          <CountdownScene onComplete={() => goToScene('typography')} />
+        )}
+
+        {currentScene === 'typography' && (
+          <OpeningTypographyScene
+            onComplete={() => goToScene('cat-guitar')}
+            onUserInteraction={registerInteraction}
+          />
+        )}
+
+        {currentScene === 'cat-guitar' && (
+          <CatGuitarScene
+            onComplete={() => goToScene('scrapbook')}
+            onUserInteraction={registerInteraction}
+          />
+        )}
+
+        {currentScene === 'scrapbook' && (
+          <ScrapbookScene
+            onComplete={() => goToScene('message-1')}
+            customPreviewUrl={customPhotos['photo1.jpg']}
+            onSelectCustomPreview={handleSelectCustomPhoto}
+            onUserInteraction={registerInteraction}
+          />
+        )}
+
+        {activeMessageScene && (
+          <MessageScene
+            key={activeMessageScene.id}
+            scene={activeMessageScene}
+            customPreviewUrl={customPhotos[activeMessageScene.expectedFileName]}
+            onSelectCustomPreview={handleSelectCustomPhoto}
+            onUserInteraction={registerInteraction}
+            onContinue={() => {
+              if (activeMessageScene.id === 'message-1') {
+                goToScene('message-2');
+              } else if (activeMessageScene.id === 'message-2') {
+                goToScene('message-3');
+              } else if (activeMessageScene.id === 'message-3') {
+                goToScene('message-4');
+              } else {
+                goToScene('final');
+              }
+            }}
+          />
+        )}
+
+        {currentScene === 'final' && (
+          <FinalScene onReplay={() => goToScene('countdown')} />
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;
